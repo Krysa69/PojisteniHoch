@@ -1,0 +1,163 @@
+openapi: 3.0.0
+info:
+  title: School News API
+  version: 1.0.0
+  description: |
+    Dokumentace REST API školního zpravodaje.
+    API umožňuje spravovat články – zobrazovat seznam, vytvářet nové položky atd.
+
+servers:
+  - url: http://localhost:8080
+    description: Lokální vývoj
+  - url: https://api.example.edu
+    description: Staging/produkce
+
+tags:
+  - name: Articles
+    description: Správa článků
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Title is required
+
+    Article:
+      type: object
+      required: [id, title, body, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "b9d2e4a2-5f91-4a1f-9e53-8a0a17c3d8d4"
+        title:
+          type: string
+          example: "Novinka z jídelny"
+        body:
+          type: string
+          example: "Dnes budou knedlíky..."
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-10-31T08:30:00Z"
+
+    ArticleCreate:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          example: "Den otevřených dveří"
+        body:
+          type: string
+          minLength: 1
+          example: "Přijďte v 10:00..."
+
+paths:
+  /articles:
+    get:
+      tags: [Articles]
+      summary: Seznam článků
+      description: Vrátí seznam článků s možností stránkování a fulltextového vyhledávání.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Index stránky (1-based)
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Počet položek na stránku
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Fulltext (titulek/tělo)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Article'
+                  total:
+                    type: integer
+                    example: 42
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags: [Articles]
+      summary: Vytvořit článek
+      description: Vytvoří nový článek. Vyžaduje autentizaci pomocí JWT tokenu.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArticleCreate'
+            examples:
+              sample:
+                value:
+                  title: "Den otevřených dveří"
+                  body: "Přijďte v 10:00..."
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              description: URL nového zdroje
+              schema:
+                type: string
+                example: /articles/b9d2e4a2-5f91-4a1f-9e53-8a0a17c3d8d4
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Article'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized (chybí/špatný token)
+        '409':
+          description: Conflict (např. duplicitní titulek)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
